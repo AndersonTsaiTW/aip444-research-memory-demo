@@ -1,0 +1,16 @@
+{
+  "name": "aip444-research-memory-demo",
+  "version": "0.0.1",
+  "description": "Dual-memory (short-term + long-term) chatbot demo — decides SAVE / IGNORE / UPDATE / DELETE / RECALL for each message.",
+  "type": "module",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "openai": "^6.39.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}
