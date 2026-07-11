@@ -1,0 +1,27 @@
+# RECALL cases: a stored memory should change the answer to a later question.
+- id: recall-001
+  turns:
+    - user: "I'm allergic to peanuts."
+    - user: "Can you suggest a snack for me?"
+  expect:
+    decision: RECALL
+    response_contains: ["peanut"]
+  rationale: "The allergy memory should influence the snack suggestion."
+
+- id: recall-002
+  turns:
+    - user: "I'm a pescatarian."
+    - user: "What should I order at a restaurant?"
+  expect:
+    decision: RECALL
+    response_contains: ["fish", "seafood", "pescatarian", "vegetarian"]
+  rationale: "Diet memory should shape restaurant advice."
+
+- id: recall-003
+  turns:
+    - user: "My name is Fariha."
+    - user: "What's my name?"
+  expect:
+    decision: RECALL
+    response_contains: ["Fariha"]
+  rationale: "Stored profile fact recalled directly."

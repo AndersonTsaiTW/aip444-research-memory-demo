@@ -4,12 +4,22 @@
   "description": "Dual-memory (short-term + long-term) chatbot demo — decides SAVE / IGNORE / UPDATE / DELETE / RECALL for each message.",
   "type": "module",
   "license": "ISC",
+  "scripts": {
+    "chat": "tsx src/index.ts chat",
+    "memories": "tsx src/index.ts memories",
+    "reset": "tsx src/index.ts reset",
+    "eval": "tsx eval/runEval.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "dotenv": "^17.4.2",
-    "openai": "^6.39.1"
+    "openai": "^6.39.1",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.5",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   }

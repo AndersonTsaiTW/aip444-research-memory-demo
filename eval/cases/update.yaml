@@ -1,0 +1,25 @@
+# UPDATE cases: new info that contradicts/refines an existing memory.
+# The first turn seeds a memory; the last turn should trigger UPDATE.
+- id: update-001
+  turns:
+    - user: "I'm a vegetarian."
+    - user: "Actually I recently started eating fish, so I'm pescatarian now."
+  expect:
+    decision: UPDATE
+  rationale: "Diet preference changed; refine the existing memory instead of adding a new one."
+
+- id: update-002
+  turns:
+    - user: "I live in Toronto."
+    - user: "I moved to Vancouver last month."
+  expect:
+    decision: UPDATE
+  rationale: "Location changed; update the existing profile fact."
+
+- id: update-003
+  turns:
+    - user: "My favorite programming language is Python."
+    - user: "These days I mostly prefer TypeScript instead."
+  expect:
+    decision: UPDATE
+  rationale: "Preference shifted; refine rather than duplicate."

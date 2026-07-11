@@ -1,0 +1,24 @@
+# DELETE cases: user explicitly asks to forget something previously stored.
+- id: delete-001
+  turns:
+    - user: "I'm working on a secret startup idea about drones."
+    - user: "Actually, please forget what I told you about my startup idea."
+  expect:
+    decision: DELETE
+  rationale: "Explicit forget request for a previously stored fact."
+
+- id: delete-002
+  turns:
+    - user: "My favorite color is green."
+    - user: "Forget my favorite color, it doesn't matter."
+  expect:
+    decision: DELETE
+  rationale: "Explicit forget request."
+
+- id: delete-003
+  turns:
+    - user: "I'm training for a marathon in October."
+    - user: "The marathon got cancelled, you can delete that from memory."
+  expect:
+    decision: DELETE
+  rationale: "Fact expired; user asks to remove it."

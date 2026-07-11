@@ -1,0 +1,28 @@
+# IGNORE cases: conversational noise that should NOT be stored.
+- id: ignore-001
+  turns:
+    - user: "Hi! Nice weather today."
+  expect:
+    decision: IGNORE
+  rationale: "Greeting + small talk, nothing durable."
+
+- id: ignore-002
+  turns:
+    - user: "lol that's funny"
+  expect:
+    decision: IGNORE
+  rationale: "Transient reaction, no reusable fact."
+
+- id: ignore-003
+  turns:
+    - user: "What time is it right now?"
+  expect:
+    decision: IGNORE
+  rationale: "One-off transient question, not a fact about the user."
+
+- id: ignore-004
+  turns:
+    - user: "Ugh, I'm so tired today."
+  expect:
+    decision: IGNORE
+  rationale: "Transient emotional state, not a stable trait."

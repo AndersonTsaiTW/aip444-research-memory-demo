@@ -1,0 +1,33 @@
+# SAVE cases: stable, reusable facts that should reach long-term memory.
+- id: save-001
+  turns:
+    - user: "I'm allergic to peanuts."
+  expect:
+    decision: SAVE
+    category: constraint
+    min_importance: 4
+  rationale: "Health constraint, stable and high-stakes."
+
+- id: save-002
+  turns:
+    - user: "I'm a vegetarian."
+  expect:
+    decision: SAVE
+    category: preference
+  rationale: "Stable dietary preference, reusable across sessions."
+
+- id: save-003
+  turns:
+    - user: "My name is Fariha and I'm studying at Seneca."
+  expect:
+    decision: SAVE
+    category: profile
+  rationale: "Durable profile facts about the user."
+
+- id: save-004
+  turns:
+    - user: "Please remember that my goal this term is to finish the AIP444 project."
+  expect:
+    decision: SAVE
+    category: project
+  rationale: "Explicit remember request about a long-term goal."

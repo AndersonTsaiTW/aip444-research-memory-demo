@@ -11,10 +11,9 @@
     "target": "esnext",
     "types": ["node"],
 
-    // Other Outputs
-    "sourceMap": true,
-    "declaration": true,
-    "declarationMap": true,
+    // Run directly via tsx (no build step): import .ts extensions, never emit.
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
 
     // Stricter Typechecking Options
     "noUncheckedIndexedAccess": true,
