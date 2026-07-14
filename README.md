@@ -15,6 +15,12 @@ decision printed to the terminal. No retrieval (RECALL) or guardrails yet. Run i
 `python -m src.main chat`; inspect stored memories with `python -m src.main memories` (add `--all` to
 include superseded/deleted rows).
 
+**Model note**: `CHAT_MODEL` defaults to `openai/gpt-4o-mini`. Two cheaper candidates
+(`google/gemini-2.5-flash-lite`, `deepseek/deepseek-v4-flash`) were tried first and dropped — both
+intermittently skipped or under-extracted tool calls (a missed fact, a hallucinated id) on the exact
+same demo script `gpt-4o-mini` ran correctly end-to-end. Not a bug in this codebase; see §8 "LLM
+decisions are inconsistent" in the plan.
+
 ## Stack
 
 - Python 3.11+, run in a project-local `venv`, no build step

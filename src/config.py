@@ -19,8 +19,10 @@ client = OpenAI(
     api_key=OPENROUTER_API_KEY,
 )
 
-# Cheap/free model for development; swap to a stronger model for the final demo recording.
-CHAT_MODEL = "google/gemini-2.5-flash-lite"
+# google/gemini-2.5-flash-lite and deepseek/deepseek-v4-flash were both tried here and dropped:
+# both intermittently skipped or under-extracted tool calls (a missed fact, a hallucinated id) on the
+# exact same demo script gpt-4o-mini ran correctly end-to-end — see §8 "LLM decisions are inconsistent".
+CHAT_MODEL = "openai/gpt-4o-mini"
 EMBEDDING_MODEL = "openai/text-embedding-3-small"
 RERANK_MODEL = "cohere/rerank-v3.5"
 OPENROUTER_RERANK_URL = OPENROUTER_BASE_URL + "/rerank"
