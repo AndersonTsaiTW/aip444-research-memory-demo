@@ -7,6 +7,73 @@ rejects memory-poisoning attempts at write time.
 
 Built as the prototype component of a university AI course research project.
 
+## Architecture
+
+One user message flows through this pipeline every turn:
+
+```text
+User types a message
+  │
+  ▼
+1. STM ingest (short_term.py) — append to the conversation buffer; if it's over the token cap,
+   summarize the oldest half into a single "[Conversation summary] ..." message so the
+   conversation keeps going without the buffer growing unbounded.
+  │
+  ▼
+2. RECALL (decision.py) — embed the message (+ recent user turns) → Chroma vector search,
+   filtered to status="active" → rerank → top 5 → re-scored by recency + importance +
+   relevance → below threshold = "nothing relevant" (an honest refusal, not a guess).
+   Injected into the system prompt with a human-readable date per memory.
+  │
+  ▼
+3. Prompt assembly — system prompt + memory policy (prompts.py) + RECALL result + STM
+   buffer/summary + the new message.
+  │
+  ▼
+4. LLM call, tools exposed (agent.py) — the model replies, and may call save_memory /
+   update_memory / delete_memory zero, one, or several times in the same turn (one call per
+   atomic fact worth acting on). No tool call at all = IGNORE — most small talk produces zero
+   calls. This is a tool-calling loop (call → execute tools → feed results back → call again
+   if needed), not strictly one shot — see step 6.
+  │
+  ▼
+5. decision.py validates — malformed tool-call arguments (pydantic) are rejected before
+   anything else runs.
+  │
+  ▼
+6. Pre-write near-duplicate check (decision.py, save_memory only) — queries active memories
+   again; a close match is surfaced back to the LLM as tool feedback instead of silently
+   double-saving. The model gets another turn to react — typically switching to
+   update_memory — still within the same user turn.
+  │
+  ▼
+7. guardrails.py — deny-checks every tool call that made it this far: behavior-override
+   instructions, secrets/credentials, third-party private data. A match → BLOCKED, the write
+   never reaches storage.
+  │
+  ▼
+8. Storage write (long_term.py), if not blocked:
+     save_memory   → new row, status="active"
+     update_memory → non-destructive: old row → status="superseded"; new row inserted,
+                      supersedes=<old_id>
+     delete_memory → soft delete, status="deleted", never physically removed
+  │
+  ▼
+9. Decision trace printed to the terminal either way — SAVE / IGNORE / UPDATE / DELETE /
+   BLOCKED / RECALL, every time. Decisions are always visible, never silent.
+  │
+  ▼
+10. Reply printed to the user → loop back to step 1 for the next message.
+```
+
+**Across sessions**: STM is discarded when the process exits; LTM lives on disk in `chroma_db/`
+and persists. A new `chat` invocation starts with empty STM but the full accumulated LTM.
+
+**Which of SAVE / UPDATE / DELETE the model picks is entirely the model's judgment call, not
+code's.** Code never classifies "this should be an update" — it only validates arguments,
+surfaces near-duplicates as feedback so the model can reconsider before a write happens, and
+enforces guardrail denials.
+
 ## Status
 
 M0-M4 done — chat loop with short-term memory, long-term memory backed by Chroma (SAVE / UPDATE
@@ -47,8 +114,8 @@ irrelevant queries through too. See the comment above `BROAD_RECALL_PHRASES` in 
 **Model note**: `CHAT_MODEL` defaults to `openai/gpt-4o-mini`. Two cheaper candidates
 (`google/gemini-2.5-flash-lite`, `deepseek/deepseek-v4-flash`) were tried first and dropped — both
 intermittently skipped or under-extracted tool calls (a missed fact, a hallucinated id) on the exact
-same demo script `gpt-4o-mini` ran correctly end-to-end. Not a bug in this codebase; see §8 "LLM
-decisions are inconsistent" in the plan.
+same demo script `gpt-4o-mini` ran correctly end-to-end. Not a bug in this codebase — it's a real
+reliability gap between models at following multi-step tool-calling instructions consistently.
 
 ## Stack
 
@@ -74,8 +141,39 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+## Usage
+
 Run the chat loop:
 
 ```bash
 python -m src.main chat
 ```
+
+Type `exit` or `quit` to end the session. Every message you send may trigger a `[MEMORY] ...` trace
+line — SAVE, IGNORE, UPDATE, DELETE, BLOCKED, or RECALL — showing exactly what the decision layer did
+with it (see Architecture above for what each one means).
+
+Inspect what's actually stored in long-term memory:
+
+```bash
+python -m src.main memories          # active memories only
+python -m src.main memories --all    # include superseded/deleted rows too
+```
+
+Run the regression suite (real LLM/embedding/rerank calls, no mocks — takes 1-2 minutes and uses API
+quota):
+
+```bash
+python -m eval.run_eval
+```
+
+Run the unit tests (no API calls, fakes/mocks only):
+
+```bash
+python -m unittest discover -s tests
+```
+
+**Windows note**: if a `python -m src.main chat` session ever raises `UnicodeEncodeError`, that's a
+non-UTF-8 terminal codepage (e.g. `cp950`) rejecting an emoji or other character — `src/main.py`
+already reconfigures stdout to UTF-8 with `errors="replace"`, so at worst you'll see a `?` in place of
+an unsupported character rather than a crash.
