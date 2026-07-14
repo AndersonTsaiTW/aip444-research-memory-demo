@@ -1,6 +1,7 @@
 import sys
 
 from src.agent import get_reply
+from src.short_term import ConversationBuffer
 
 # Windows terminals often default to a non-UTF-8 codepage (e.g. cp950), which raises
 # UnicodeEncodeError on emoji or other characters outside that codepage.
@@ -11,7 +12,7 @@ USAGE = "Usage: python -m src.main chat"
 
 def run_chat() -> None:
     print("Chat started. Type 'exit' or 'quit' to end the session.\n")
-    history: list[dict] = []
+    buffer = ConversationBuffer()
 
     while True:
         try:
@@ -26,10 +27,13 @@ def run_chat() -> None:
         if not user_input:
             continue
 
-        history.append({"role": "user", "content": user_input})
-        reply = get_reply(history)
-        history.append({"role": "assistant", "content": reply})
+        summarized = buffer.add("user", user_input)
+        reply = get_reply(buffer.messages)
+        summarized = buffer.add("assistant", reply) or summarized
         print(f"Agent: {reply}\n")
+        if summarized:
+            print("[STM] token cap exceeded — oldest half of the conversation summarized.")
+        print(f"[STM] buffer at {buffer.usage_ratio():.0%} ({buffer.token_count()}/{buffer.max_tokens} tokens)\n")
 
 
 def main() -> None:
