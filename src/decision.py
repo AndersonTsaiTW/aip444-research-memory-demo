@@ -1,9 +1,23 @@
 import json
+from datetime import datetime, timezone
 from typing import Literal
 
+import requests
 from pydantic import BaseModel, ValidationError, field_validator
 
 from src import long_term
+from src.config import OPENROUTER_API_KEY, OPENROUTER_RERANK_URL, RERANK_MODEL
+
+RECALL_CANDIDATES = 15  # vector-search candidate pool size, before rerank
+RECALL_TOP_N = 5  # how many candidates rerank narrows down to
+
+# Picked empirically, same method as lab-06 Part 4 Step 3: embedded a handful of saved facts, then
+# compared cohere rerank scores for in-domain queries ("What do I eat?" -> 0.108-0.241) against
+# out-of-domain queries ("What's the weather on Mars?" -> 0.020-0.038) — no overlap between the two
+# groups, so 0.08 sits cleanly in the gap. Uses the rerank score, not raw cosine similarity, since
+# rerank is the more semantically-calibrated signal and it's already computed by this point in the
+# pipeline (§4.3 step 5).
+MIN_SIMILARITY_SCORE = 0.08
 
 # Cheap dev-tier models don't always respect the enum constraint and sometimes send a qualitative
 # word instead of an integer (e.g. importance="high") — coerce common cases instead of rejecting
@@ -177,3 +191,108 @@ def execute_tool_call(name: str, arguments_json: str, source: str) -> str:
     except ValueError as e:
         print(f"[MEMORY] REJECTED {name} — {e}")
         return json.dumps({"error": str(e)})
+
+
+def _rerank_candidates(query: str, candidates: list[dict], top_n: int) -> list[dict]:
+    # Mirrors lab-06/lab-07's rerank_results helper exactly (same endpoint, same request shape).
+    documents = [f"{c['label']}: {c['content']}" for c in candidates]
+    response = requests.post(
+        OPENROUTER_RERANK_URL,
+        headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+        json={"model": RERANK_MODEL, "query": query, "documents": documents, "top_n": top_n},
+    )
+    data = response.json()
+    return [{**candidates[r["index"]], "rerank_score": r["relevance_score"]} for r in data["results"]]
+
+
+def _recency_score(updated_at: str) -> float:
+    # Exponential decay (Generative Agents §4.1) — ~half-life of 3 days, so recency stops dominating
+    # the combined score after about a week but never fully zeroes out.
+    updated = datetime.fromisoformat(updated_at)
+    hours_elapsed = (datetime.now(timezone.utc) - updated).total_seconds() / 3600
+    return 0.99**hours_elapsed
+
+
+def _rescore(candidates: list[dict]) -> list[dict]:
+    # recency + importance + relevance, equal-weighted (Generative Agents §4.1); relevance = rerank
+    # score, importance = the LLM-assigned 1-5 field normalized to [0,1].
+    for candidate in candidates:
+        recency = _recency_score(candidate["updated_at"])
+        importance = candidate["importance"] / 5
+        relevance = candidate["rerank_score"]
+        candidate["combined_score"] = recency + importance + relevance
+    return sorted(candidates, key=lambda c: c["combined_score"], reverse=True)
+
+
+def _format_recall_line(memory: dict) -> str:
+    updated = datetime.fromisoformat(memory["updated_at"])
+    days_ago = (datetime.now(timezone.utc) - updated).days
+    when = "today" if days_ago < 1 else f"{days_ago} day{'s' if days_ago != 1 else ''} ago"
+    return (
+        f"- [id={memory['id']}] ({memory['label']}, importance={memory['importance']}) "
+        f"{memory['content']} (updated {updated.date()}, {when})"
+    )
+
+
+
+# A broad "tell me everything" question doesn't share vocabulary with any single atomic fact, so it
+# scores just as low under similarity/rerank as a genuinely irrelevant question does — verified
+# empirically: "What do you remember about me?" (0.029) and "Tell me about myself" (0.049) both land
+# below MIN_SIMILARITY_SCORE even when directly relevant memories exist, indistinguishable by score
+# alone from "What's my favorite programming language?" (0.032, genuinely nothing stored). Similarity
+# thresholding solves "is this specific query answerable," not "does the user want a general recap" —
+# those are different questions, so broad recall gets its own path instead of a lower threshold (which
+# would just let genuinely irrelevant queries through too).
+BROAD_RECALL_PHRASES = (
+    # anchored on "...me"/"myself" specifically — an unanchored "what do you know" would also match
+    # a specific query like "What do you know about my diet?", which should NOT skip the similarity
+    # gate (it has a real topic to match against).
+    "remember about me",
+    "know about me",
+    "tell me about me",
+    "tell me about myself",
+    "what have i told you",
+)
+
+
+def _is_broad_recall_query(query: str) -> bool:
+    lowered = query.lower()
+    return any(phrase in lowered for phrase in BROAD_RECALL_PHRASES)
+
+
+def recall(query: str, latest_message: str | None = None) -> str | None:
+    """Retrieval pipeline (§4.3): vector search -> rerank -> recency/importance/relevance re-score
+    -> threshold. Always prints a decision trace. Returns formatted, dated memory lines to inject into
+    the system prompt, or None if nothing is relevant enough (an honest "nothing relevant", not a
+    guess).
+
+    `query` (the embedding text) may be a multi-message window for better semantic search, but the
+    broad-recall check runs on `latest_message` alone (defaulting to `query` if not given) — otherwise
+    a broad phrase from an earlier turn still sitting in that window ("what do you remember about me")
+    would keep tripping the broad-query path on later, unrelated messages in the same window.
+    """
+    candidates = long_term.query_active(query, n_results=RECALL_CANDIDATES)
+    if not candidates:
+        print("[MEMORY] RECALL     (no memories stored yet)")
+        return None
+
+    if _is_broad_recall_query(latest_message if latest_message is not None else query):
+        # No single topic to match against — skip the similarity gate and surface the most
+        # important/recent facts instead (relevance is neutral since there's no specific query to
+        # score against).
+        rescored = _rescore([{**c, "rerank_score": 0.5} for c in candidates])[:RECALL_TOP_N]
+        quoted = ", ".join(f'"{m["content"]}"' for m in rescored)
+        print(f"[MEMORY] RECALL     (broad query, top={len(rescored)}) injected: {quoted}")
+        return "\n".join(_format_recall_line(m) for m in rescored)
+
+    reranked = _rerank_candidates(query, candidates, top_n=RECALL_TOP_N)
+    best_score = reranked[0]["rerank_score"]
+
+    if best_score < MIN_SIMILARITY_SCORE:
+        print(f"[MEMORY] RECALL     (no relevant memory, best_score={best_score:.2f} < threshold {MIN_SIMILARITY_SCORE})")
+        return None
+
+    rescored = _rescore(reranked)
+    quoted = ", ".join(f'"{m["content"]}"' for m in rescored)
+    print(f"[MEMORY] RECALL     (top={len(rescored)}, best_score={best_score:.2f}) injected: {quoted}")
+    return "\n".join(_format_recall_line(m) for m in rescored)

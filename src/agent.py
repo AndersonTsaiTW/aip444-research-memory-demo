@@ -1,19 +1,38 @@
 from src.config import CHAT_MODEL, client
-from src.decision import TOOLS, execute_tool_call
+from src.decision import TOOLS, execute_tool_call, recall
 from src.prompts import SYSTEM_PROMPT
 
 MAX_ITERATIONS = 5
+RECALL_QUERY_WINDOW = 3  # latest message + a short window of recent STM, per §4.3 step 1
+
+
+def _build_recall_query(history: list[dict]) -> str:
+    # User messages only, deliberately — an assistant reply right after a RECALL often restates the
+    # recalled content ("I remember you're pescatarian..."), which would otherwise feed that content
+    # back into the next turn's embedding and make an unrelated follow-up question look related to it.
+    user_messages = [m for m in history if m.get("role") == "user"]
+    recent = user_messages[-RECALL_QUERY_WINDOW:]
+    return " ".join(m.get("content") or "" for m in recent)
 
 
 def build_messages(history: list[dict]) -> list[dict]:
-    return [{"role": "system", "content": SYSTEM_PROMPT}] + history
+    latest_message = (history[-1].get("content") or "") if history else ""
+    recalled = recall(_build_recall_query(history), latest_message=latest_message)
+    system_content = SYSTEM_PROMPT
+    if recalled:
+        system_content += (
+            "\n\nRelevant memories about this user (only reference facts listed here — if something "
+            "isn't listed, you have no stored information about it, so say so honestly instead of "
+            "guessing):\n" + recalled
+        )
+    return [{"role": "system", "content": system_content}] + history
 
 
 def get_reply(history: list[dict], source: str) -> tuple[str, list[dict]]:
-    """Runs the tool-calling loop for one turn (call -> execute tools -> feed results back ->
-    call again, per §0/§4.5). Returns (final_reply_text, new_messages) where new_messages is every
-    assistant/tool message generated this turn, in order — the caller is responsible for appending
-    these to the STM buffer.
+    """Runs the tool-calling loop for one turn (RECALL, then call -> execute tools -> feed results
+    back -> call again, per §0/§4.5). Returns (final_reply_text, new_messages) where new_messages is
+    every assistant/tool message generated this turn, in order — the caller is responsible for
+    appending these to the STM buffer.
     """
     messages = build_messages(history)
     new_messages: list[dict] = []

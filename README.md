@@ -9,11 +9,18 @@ Built as the prototype component of a university AI course research project.
 
 ## Status
 
-M0 + M1 + M2 done — chat loop with short-term memory, plus long-term memory backed by Chroma: the
-agent can SAVE / UPDATE (non-destructively) / DELETE (soft) atomic facts about the user, with every
-decision printed to the terminal. No retrieval (RECALL) or guardrails yet. Run it with
+M0-M3 done — chat loop with short-term memory, long-term memory backed by Chroma (SAVE / UPDATE
+non-destructively / DELETE softly), and retrieval: every turn does a vector search + rerank +
+recency/importance/relevance re-score before replying, so memories actually persist and get used
+across separate `chat` sessions, not just within one. No guardrails yet. Run it with
 `python -m src.main chat`; inspect stored memories with `python -m src.main memories` (add `--all` to
 include superseded/deleted rows).
+
+**Retrieval note**: a broad "what do you remember about me?"-style question doesn't share vocabulary
+with any single stored fact, so it scores just as low under similarity/rerank as a genuinely irrelevant
+question — verified empirically. Broad recall questions get their own path (skip the similarity gate,
+surface the most important/recent facts) instead of a lower threshold, which would let genuinely
+irrelevant queries through too. See the comment above `BROAD_RECALL_PHRASES` in `src/decision.py`.
 
 **Model note**: `CHAT_MODEL` defaults to `openai/gpt-4o-mini`. Two cheaper candidates
 (`google/gemini-2.5-flash-lite`, `deepseek/deepseek-v4-flash`) were tried first and dropped — both
