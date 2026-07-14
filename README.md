@@ -9,12 +9,20 @@ Built as the prototype component of a university AI course research project.
 
 ## Status
 
-M0-M3 done — chat loop with short-term memory, long-term memory backed by Chroma (SAVE / UPDATE
-non-destructively / DELETE softly), and retrieval: every turn does a vector search + rerank +
-recency/importance/relevance re-score before replying, so memories actually persist and get used
-across separate `chat` sessions, not just within one. No guardrails yet. Run it with
-`python -m src.main chat`; inspect stored memories with `python -m src.main memories` (add `--all` to
-include superseded/deleted rows).
+M0-M3 done, M4 in progress (guardrails done; pre-write similarity check and the `eval/` harness still
+to come) — chat loop with short-term memory, long-term memory backed by Chroma (SAVE / UPDATE
+non-destructively / DELETE softly), retrieval (vector search + rerank + recency/importance/relevance
+re-score before replying, so memories persist and get used across separate `chat` sessions), and
+write-time guardrails that deny behavior-override instructions, secrets/credentials, and third-party
+private data before they ever reach storage. Run it with `python -m src.main chat`; inspect stored
+memories with `python -m src.main memories` (add `--all` to include superseded/deleted rows).
+
+**Guardrails note**: with a capable, safety-trained model (the current default, `gpt-4o-mini`), asking
+it to remember an API key or "ignore all future safety warnings" gets refused by the model itself
+(`IGNORE`) before it ever calls `save_memory` — the write-time deny-list in `src/guardrails.py` never
+gets exercised through the natural chat flow for these two lines. That's not a sign it's untested: see
+`tests/test_guardrails.py`, which calls the decision layer directly with the same payloads a
+non-compliant model would send, and confirms both get `BLOCKED` before reaching storage.
 
 **Retrieval note**: a broad "what do you remember about me?"-style question doesn't share vocabulary
 with any single stored fact, so it scores just as low under similarity/rerank as a genuinely irrelevant

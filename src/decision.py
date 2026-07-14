@@ -5,7 +5,7 @@ from typing import Literal
 import requests
 from pydantic import BaseModel, ValidationError, field_validator
 
-from src import long_term
+from src import guardrails, long_term
 from src.config import OPENROUTER_API_KEY, OPENROUTER_RERANK_URL, RERANK_MODEL
 
 RECALL_CANDIDATES = 15  # vector-search candidate pool size, before rerank
@@ -159,6 +159,10 @@ def execute_tool_call(name: str, arguments_json: str, source: str) -> str:
     try:
         if name == "save_memory":
             parsed = SaveMemoryArgs(**args)
+            deny_reason = guardrails.check(parsed.content)
+            if deny_reason:
+                print(f"[MEMORY] BLOCKED save — matched rule: {deny_reason}")
+                return json.dumps({"status": "blocked", "reason": deny_reason})
             memory = long_term.save_memory(parsed.content, parsed.label, parsed.importance, source)
             print(
                 f'[MEMORY] SAVE       (imp={parsed.importance}, label="{parsed.label}") '
@@ -168,6 +172,10 @@ def execute_tool_call(name: str, arguments_json: str, source: str) -> str:
 
         elif name == "update_memory":
             parsed = UpdateMemoryArgs(**args)
+            deny_reason = guardrails.check(parsed.new_content)
+            if deny_reason:
+                print(f"[MEMORY] BLOCKED update — matched rule: {deny_reason}")
+                return json.dumps({"status": "blocked", "reason": deny_reason})
             memory = long_term.update_memory(parsed.id, parsed.new_content, source)
             print(
                 f'[MEMORY] UPDATE     {parsed.id} → {memory["id"]} "{parsed.new_content}" '
