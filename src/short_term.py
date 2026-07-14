@@ -10,7 +10,7 @@ def estimate_tokens(text: str) -> int:
 
 
 def summarize_messages(messages: list[dict]) -> str:
-    transcript = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
+    transcript = "\n".join(f"{m['role']}: {m.get('content') or ''}" for m in messages)
     response = client.chat.completions.create(
         model=CHAT_MODEL,
         messages=[
@@ -36,13 +36,19 @@ class ConversationBuffer:
 
     def add(self, role: str, content: str) -> bool:
         """Appends a message. Returns True if adding it triggered an overflow summarization."""
-        self.messages.append({"role": role, "content": content})
+        return self.extend([{"role": role, "content": content}])
+
+    def extend(self, messages: list[dict]) -> bool:
+        """Appends multiple messages at once (e.g. a full tool-calling turn: assistant + tool
+        results + final reply), checking overflow once at the end. Returns True if it triggered an
+        overflow summarization."""
+        self.messages.extend(messages)
         if self.token_count() > self.max_tokens:
             return self._summarize_oldest_half()
         return False
 
     def token_count(self) -> int:
-        return sum(estimate_tokens(m["content"]) for m in self.messages)
+        return sum(estimate_tokens(m.get("content") or "") for m in self.messages)
 
     def usage_ratio(self) -> float:
         return self.token_count() / self.max_tokens if self.max_tokens else 0.0

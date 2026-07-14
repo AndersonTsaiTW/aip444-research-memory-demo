@@ -1,5 +1,6 @@
 import sys
 
+from src import long_term
 from src.agent import get_reply
 from src.short_term import ConversationBuffer
 
@@ -7,7 +8,7 @@ from src.short_term import ConversationBuffer
 # UnicodeEncodeError on emoji or other characters outside that codepage.
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-USAGE = "Usage: python -m src.main chat"
+USAGE = "Usage: python -m src.main <chat|memories [--all]>"
 
 
 def run_chat() -> None:
@@ -28,12 +29,24 @@ def run_chat() -> None:
             continue
 
         summarized = buffer.add("user", user_input)
-        reply = get_reply(buffer.messages)
-        summarized = buffer.add("assistant", reply) or summarized
+        reply, new_messages = get_reply(buffer.messages, source=user_input)
+        summarized = buffer.extend(new_messages) or summarized
         print(f"Agent: {reply}\n")
         if summarized:
             print(f"[STM] token cap exceeded — oldest half summarized: {buffer.last_summary}")
         print(f"[STM] buffer at {buffer.usage_ratio():.0%} ({buffer.token_count()}/{buffer.max_tokens} tokens)\n")
+
+
+def run_memories(show_all: bool) -> None:
+    memories = long_term.list_memories(include_inactive=show_all)
+    if not memories:
+        print("No memories stored yet.")
+        return
+
+    for m in memories:
+        status_tag = f" [{m['status']}]" if show_all else ""
+        supersedes = f" (supersedes {m['supersedes']})" if m.get("supersedes") else ""
+        print(f"[{m['id']}]{status_tag} ({m['label']}, imp={m['importance']}) {m['content']}{supersedes}")
 
 
 def main() -> None:
@@ -44,6 +57,8 @@ def main() -> None:
     command = sys.argv[1]
     if command == "chat":
         run_chat()
+    elif command == "memories":
+        run_memories(show_all="--all" in sys.argv[2:])
     else:
         print(f"Unknown command: {command}")
         print(USAGE)

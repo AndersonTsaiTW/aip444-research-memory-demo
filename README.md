@@ -9,16 +9,19 @@ Built as the prototype component of a university AI course research project.
 
 ## Status
 
-M0 + M1 done — chat loop with short-term memory (bounded conversation buffer, overflow summarization).
-No long-term memory or decision layer yet. Run it with `python -m src.main chat`.
+M0 + M1 + M2 done — chat loop with short-term memory, plus long-term memory backed by Chroma: the
+agent can SAVE / UPDATE (non-destructively) / DELETE (soft) atomic facts about the user, with every
+decision printed to the terminal. No retrieval (RECALL) or guardrails yet. Run it with
+`python -m src.main chat`; inspect stored memories with `python -m src.main memories` (add `--all` to
+include superseded/deleted rows).
 
 ## Stack
 
 - Python 3.11+, run in a project-local `venv`, no build step
 - `openai` SDK pointed at OpenRouter for the LLM and embeddings
-- `chromadb` (embedded, persistent) for long-term memory (not wired up yet)
-- `pydantic` for validating tool-call arguments and data models (not wired up yet)
-- Python's built-in `unittest` for unit tests (see `tests/test_short_term.py`)
+- `chromadb` (embedded, persistent) for long-term memory
+- `pydantic` for validating tool-call arguments and data models
+- Python's built-in `unittest` for unit tests (see `tests/`)
 
 ## Setup
 
