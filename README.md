@@ -44,7 +44,8 @@ User types a message
 6. Pre-write near-duplicate check (decision.py, save_memory only) — queries active memories
    again; a close match is surfaced back to the LLM as tool feedback instead of silently
    double-saving. The model gets another turn to react — typically switching to
-   update_memory — still within the same user turn.
+   update_memory, or retrying save_memory with override=true if the match turns out to be
+   unrelated — still within the same user turn.
   │
   ▼
 7. guardrails.py — deny-checks every tool call that made it this far: behavior-override
@@ -76,15 +77,18 @@ enforces guardrail denials.
 
 ## Status
 
-M0-M4 done — chat loop with short-term memory, long-term memory backed by Chroma (SAVE / UPDATE
-non-destructively / DELETE softly), retrieval (vector search + rerank + recency/importance/relevance
-re-score before replying, so memories persist and get used across separate `chat` sessions), write-time
-guardrails that deny behavior-override instructions, secrets/credentials, and third-party private data
-before they ever reach storage, a pre-write near-duplicate check that surfaces a close-matching existing
-memory instead of silently double-saving, and an `eval/` regression suite (real LLM, no mocks) covering
-all of the above. Run it with `python -m src.main chat`; inspect stored memories with
+M0-M4 done, M5 (polish) partly under way — chat loop with short-term memory, long-term memory backed by
+Chroma (SAVE / UPDATE non-destructively / DELETE softly, with an `override` escape hatch on save_memory
+for when the near-duplicate check false-positives), retrieval (vector search + rerank +
+recency/importance/relevance re-score before replying, so memories persist and get used across separate
+`chat` sessions), write-time guardrails that deny behavior-override instructions, secrets/credentials,
+and third-party private data before they ever reach storage, a pre-write near-duplicate check that
+surfaces a close-matching existing memory instead of silently double-saving, and an `eval/` regression
+suite (real LLM, no mocks) covering all of the above. Of M5's remaining items, the architecture diagram
+and Usage section below are already in place and the `unittest` suite covers every `src/` module; a demo
+GIF is still outstanding. Run it with `python -m src.main chat`; inspect stored memories with
 `python -m src.main memories` (add `--all` to include superseded/deleted rows); run the eval suite with
-`python -m eval.run_eval` (15/15 passing as of 2026-07-16, checked stable across 3 runs).
+`python -m eval.run_eval` (16/16 passing as of 2026-07-16, checked stable across 3 runs).
 
 **Eval note**: `eval/cases/*.yaml` replays scripted conversations through the real agent (no mocks) and
 grades the decision layer's output; `eval/cases/poisoning.yaml` also has `direct_tool_call` cases that
@@ -93,10 +97,17 @@ bypass the LLM entirely to prove the write-time guardrail works on its own. One 
 that fact alone didn't get saved reliably outside the demo script's paired-with-a-preference framing —
 not a code bug; see `eval/cases/delete.yaml`'s rationale field for the fix (a food-allergy fact instead).
 
-**Near-duplicate note**: `CONTRADICTION_SIMILARITY_THRESHOLD` is 0.30, not the plan's original "e.g.
-0.85" placeholder — that number was never validated and turned out far too high for the real embedding
-model (the clearest possible near-duplicate only scored 0.49). See the comment above the constant in
-`src/decision.py` for the empirical basis.
+**Near-duplicate note**: `CONTRADICTION_SIMILARITY_THRESHOLD` is 0.30, not an unvalidated "e.g. 0.85"
+placeholder — that number was never tested against the real embedding model and turned out far too high
+(the clearest possible near-duplicate only scored 0.49). See the comment above the constant in
+`src/decision.py` for the empirical basis. No single threshold is airtight, though: two short, unrelated
+facts about the same user (a dietary preference and a favorite sport) once scored 0.33 — above the
+threshold — which silently blocked a real save and, in one traced case, caused a later `delete_memory`
+call to target the wrong (surfaced-but-unrelated) memory instead. `save_memory` now accepts an
+`override: true` argument so the model can force the save through once it has confirmed the surfaced
+memory is unrelated, instead of the fact being silently dropped; see
+`tests/test_decision.py::TestExecuteToolCallSaveMemory.test_override_skips_near_duplicate_check_and_saves`
+and `eval/cases/contradiction.yaml`'s `contradiction-002` case for regression coverage.
 
 **Guardrails note**: with a capable, safety-trained model (the current default, `gpt-4o-mini`), asking
 it to remember an API key or "ignore all future safety warnings" gets refused by the model itself
