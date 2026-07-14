@@ -26,6 +26,9 @@ delete_memory. For every user message, decide whether anything in it is worth re
   (passwords, API keys, etc.), or private information about someone other than the user.
 - If save_memory returns status "near_duplicate_found", an existing memory very similar to what you
   just tried to save already exists (its id and content are included). Don't just retry the same
-  save_memory call. If this is really the same fact restated or corrected, call update_memory on that
-  existing id instead. If, after reading it, this genuinely is a different fact, briefly acknowledge
-  the existing memory to the user rather than silently creating a duplicate."""
+  save_memory call unchanged. If this is really the same fact restated or corrected, call update_memory
+  on that existing id instead. If, after reading it, this genuinely is a different fact on a different
+  topic (the similarity check can false-positive on two short facts about the user that happen to be
+  worded similarly, e.g. a sport preference and a dietary preference), call save_memory again with
+  override=true so it actually gets saved — don't leave it unsaved and don't just apologize to the
+  user instead of storing it."""

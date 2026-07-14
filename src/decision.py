@@ -78,6 +78,16 @@ TOOLS = [
                         "description": "How important this fact is, 1 (minor) to 5 (critical, e.g. allergies).",
                     },
                     "reason": {"type": "string", "description": "Why this is worth remembering."},
+                    "override": {
+                        "type": "boolean",
+                        "description": (
+                            "Only set true on a retry: if a previous save_memory call for this same "
+                            "fact returned status 'near_duplicate_found' and, after reading the "
+                            "existing memory shown to you, you've concluded this is genuinely a "
+                            "different fact (not the same topic reworded), call save_memory again "
+                            "with override=true to save it anyway. Never set true on a first attempt."
+                        ),
+                    },
                 },
                 "required": ["content", "label", "importance", "reason"],
                 "additionalProperties": False,
@@ -133,6 +143,7 @@ class SaveMemoryArgs(BaseModel):
     label: str
     importance: Literal[1, 2, 3, 4, 5]
     reason: str
+    override: bool = False
 
     @field_validator("importance", mode="before")
     @classmethod
@@ -188,7 +199,7 @@ def execute_tool_call(name: str, arguments_json: str, source: str) -> str:
                 print(f"[MEMORY] BLOCKED save — matched rule: {deny_reason}")
                 return json.dumps({"status": "blocked", "reason": deny_reason})
 
-            near_duplicate = _check_near_duplicate(parsed.content)
+            near_duplicate = None if parsed.override else _check_near_duplicate(parsed.content)
             if near_duplicate:
                 print(
                     f'[MEMORY] SURFACED   near-duplicate of "{near_duplicate["content"]}" '
@@ -199,7 +210,9 @@ def execute_tool_call(name: str, arguments_json: str, source: str) -> str:
                         "status": "near_duplicate_found",
                         "message": (
                             f"This is very similar to an existing memory (id={near_duplicate['id']}): "
-                            f"'{near_duplicate['content']}'. Did you mean to call update_memory instead?"
+                            f"'{near_duplicate['content']}'. If this is the same fact restated, call "
+                            "update_memory on that id instead. If it's genuinely a different fact, call "
+                            "save_memory again with override=true to save it anyway."
                         ),
                         "existing_id": near_duplicate["id"],
                         "existing_content": near_duplicate["content"],
@@ -207,8 +220,9 @@ def execute_tool_call(name: str, arguments_json: str, source: str) -> str:
                 )
 
             memory = long_term.save_memory(parsed.content, parsed.label, parsed.importance, source)
+            override_note = " [override]" if parsed.override else ""
             print(
-                f'[MEMORY] SAVE       (imp={parsed.importance}, label="{parsed.label}") '
+                f'[MEMORY] SAVE       (imp={parsed.importance}, label="{parsed.label}"){override_note} '
                 f'"{parsed.content}" — reason: {parsed.reason}'
             )
             return json.dumps({**memory, "status": "saved"})

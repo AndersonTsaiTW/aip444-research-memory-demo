@@ -166,6 +166,35 @@ class TestExecuteToolCallSaveMemory(unittest.TestCase):
 
     @patch("src.decision.long_term.save_memory")
     @patch("src.decision._check_near_duplicate")
+    def test_override_skips_near_duplicate_check_and_saves(self, mock_check_dup, mock_save):
+        # Escape hatch for a false-positive near-duplicate (found via a live-testing transcript: two
+        # short, unrelated "User's X is Y" facts about the same person can score above
+        # CONTRADICTION_SIMILARITY_THRESHOLD on raw cosine similarity alone). override=True must bypass
+        # the check entirely, not just override its result.
+        mock_save.return_value = {"id": "new-id", "content": "User's favourite sport is cricket", "status": "active"}
+
+        result = json.loads(
+            execute_tool_call(
+                "save_memory",
+                json.dumps(
+                    {
+                        "content": "User's favourite sport is cricket",
+                        "label": "favorite sport",
+                        "importance": 3,
+                        "reason": "user explicitly asked to remember",
+                        "override": True,
+                    }
+                ),
+                source="My favourite sport is cricket. Please remember that.",
+            )
+        )
+
+        self.assertEqual(result["status"], "saved")
+        mock_check_dup.assert_not_called()
+        mock_save.assert_called_once()
+
+    @patch("src.decision.long_term.save_memory")
+    @patch("src.decision._check_near_duplicate")
     def test_saves_normally_when_no_duplicate(self, mock_check_dup, mock_save):
         mock_check_dup.return_value = None
         mock_save.return_value = {"id": "new-id", "content": "User has a dog", "status": "active"}

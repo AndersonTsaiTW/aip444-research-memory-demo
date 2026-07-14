@@ -1,6 +1,7 @@
 | Case | Expected | Pass | Detail |
 |---|---|---|---|
 | contradiction-001 | `{'decision': ['UPDATE', 'SURFACED']}` | PASS | ok |
+| contradiction-002 | `{'decision': 'SAVE'}` | PASS | ok |
 | delete-001 | `{'decision': 'DELETE'}` | PASS | ok |
 | ignore-001 | `{'decision': 'IGNORE'}` | PASS | ok |
 | ignore-002 | `{'decision': 'IGNORE'}` | PASS | ok |
@@ -16,4 +17,4 @@
 | save-003 | `{'decision': 'SAVE'}` | PASS | ok |
 | update-001 | `{'decision': 'UPDATE'}` | PASS | ok |
 
-**15/15 passed**
+**16/16 passed**

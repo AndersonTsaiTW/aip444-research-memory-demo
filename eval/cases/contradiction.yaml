@@ -8,3 +8,17 @@
   rationale: "Near-duplicate of an already-superseded topic (§4.4) should be surfaced, not silently
     re-saved as a second, contradicting row. A model that reacts to the surfaced near-duplicate by
     calling update_memory (UPDATE) is also an acceptable outcome — either way, no duplicate is created."
+
+- id: contradiction-002
+  turns:
+    - user: "I'm vegetarian."
+    - user: "My favourite sport is cricket. Please remember that."
+  expect:
+    decision: SAVE
+  rationale: "Regression case for a real bug found via live testing: two short, unrelated 'User's X is
+    Y' facts about the same person (a dietary preference and a favorite sport) can score above
+    CONTRADICTION_SIMILARITY_THRESHOLD on raw cosine similarity alone, even though they share no real
+    topic — the pre-write check surfaces a false-positive near-duplicate here. The fact must still end
+    up SAVEd (via the override=true retry path in decision.py/prompts.py), not silently dropped — the
+    original failure mode left the fact unsaved and, in a longer conversation, caused a later
+    delete_memory call to target the wrong (surfaced, unrelated) memory instead."
