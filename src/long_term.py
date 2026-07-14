@@ -113,6 +113,27 @@ class MemoryStore:
         memories.sort(key=lambda m: m["created_at"])
         return memories
 
+    def query_active(self, query_text: str, n_results: int = 15) -> list[dict]:
+        """Vector similarity search narrowed to active memories only (§4.3). `label` isn't used as a
+        `where` filter — it's free text, not a reliable filter dimension (see §4.3's note on this)."""
+        collection = self._collection()
+        count = collection.count()
+        if count == 0:
+            return []
+
+        results = collection.query(
+            query_texts=[query_text],
+            n_results=min(n_results, count),
+            where={"status": "active"},
+            include=["metadatas", "distances"],
+        )
+        candidates = []
+        for memory_id, metadata, distance in zip(
+            results["ids"][0], results["metadatas"][0], results["distances"][0]
+        ):
+            candidates.append({"id": memory_id, "similarity": 1 - distance, **metadata})
+        return candidates
+
 
 _default_store: Optional[MemoryStore] = None
 
@@ -138,3 +159,7 @@ def delete_memory(memory_id: str) -> dict:
 
 def list_memories(include_inactive: bool = False) -> list[dict]:
     return _store().list_memories(include_inactive)
+
+
+def query_active(query_text: str, n_results: int = 15) -> list[dict]:
+    return _store().query_active(query_text, n_results)

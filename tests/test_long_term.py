@@ -14,6 +14,9 @@ class FakeEmbeddingFunction:
     def __call__(self, input: list[str]) -> list[list[float]]:
         return [[float(hash(text) % 997) / 997.0] * 8 for text in input]
 
+    def embed_query(self, input: list[str]) -> list[list[float]]:
+        return self(input)
+
     @staticmethod
     def name() -> str:
         return "fake"
@@ -87,6 +90,30 @@ class TestMemoryStore(unittest.TestCase):
         result_ids = [m["id"] for m in self.store.list_memories()]
         self.assertIn(active["id"], result_ids)
         self.assertNotIn(to_delete["id"], result_ids)
+
+    def test_query_active_returns_similarity_and_metadata(self):
+        memory = self.store.save_memory("User is vegetarian", "dietary preference", 4, "msg")
+        results = self.store.query_active("What do I eat?", n_results=15)
+
+        self.assertTrue(any(r["id"] == memory["id"] for r in results))
+        match = next(r for r in results if r["id"] == memory["id"])
+        self.assertIn("similarity", match)
+        self.assertEqual(match["content"], "User is vegetarian")
+        self.assertEqual(match["status"], "active")
+
+    def test_query_active_excludes_superseded_and_deleted(self):
+        original = self.store.save_memory("User is vegetarian", "dietary preference", 4, "msg")
+        self.store.update_memory(original["id"], "User is pescatarian", "msg")
+        deleted = self.store.save_memory("User likes tea", "beverage preference", 2, "msg")
+        self.store.delete_memory(deleted["id"])
+
+        results = self.store.query_active("anything", n_results=15)
+        result_ids = [r["id"] for r in results]
+        self.assertNotIn(original["id"], result_ids)  # now superseded
+        self.assertNotIn(deleted["id"], result_ids)
+
+    def test_query_active_on_empty_store_returns_empty_list(self):
+        self.assertEqual(self.store.query_active("anything"), [])
 
 
 if __name__ == "__main__":
