@@ -45,6 +45,12 @@ class TestConversationBuffer(unittest.TestCase):
         self.assertIn("[Conversation summary]", buffer.messages[0]["content"])
         self.assertIn("stub summary of 2 messages", buffer.messages[0]["content"])
         self.assertEqual(len(buffer.messages), 4)  # 1 summary + 3 remaining originals
+        self.assertEqual(buffer.last_summary, "stub summary of 2 messages")
+
+    def test_last_summary_is_none_before_any_overflow(self):
+        buffer = ConversationBuffer(max_tokens=1000, summarizer=stub_summarizer)
+        buffer.add("user", "hello")
+        self.assertIsNone(buffer.last_summary)
 
     def test_add_returns_true_only_when_summarization_triggered(self):
         buffer = ConversationBuffer(max_tokens=1000, summarizer=stub_summarizer)

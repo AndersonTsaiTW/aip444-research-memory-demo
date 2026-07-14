@@ -32,7 +32,7 @@ def run_chat() -> None:
         summarized = buffer.add("assistant", reply) or summarized
         print(f"Agent: {reply}\n")
         if summarized:
-            print("[STM] token cap exceeded — oldest half of the conversation summarized.")
+            print(f"[STM] token cap exceeded — oldest half summarized: {buffer.last_summary}")
         print(f"[STM] buffer at {buffer.usage_ratio():.0%} ({buffer.token_count()}/{buffer.max_tokens} tokens)\n")
 
 

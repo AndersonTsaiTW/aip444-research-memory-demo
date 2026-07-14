@@ -32,6 +32,7 @@ class ConversationBuffer:
         self.max_tokens = max_tokens
         self.messages: list[dict] = []
         self._summarizer = summarizer
+        self.last_summary: str | None = None
 
     def add(self, role: str, content: str) -> bool:
         """Appends a message. Returns True if adding it triggered an overflow summarization."""
@@ -52,5 +53,6 @@ class ConversationBuffer:
             return False
         oldest, rest = self.messages[:split], self.messages[split:]
         summary = self._summarizer(oldest)
+        self.last_summary = summary
         self.messages = [{"role": "system", "content": f"[Conversation summary] {summary}"}] + rest
         return True
