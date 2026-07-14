@@ -1,0 +1,7 @@
+- id: update-001
+  turns:
+    - user: "I'm vegetarian."
+    - user: "Actually I recently started eating fish, so pescatarian now."
+  expect:
+    decision: UPDATE
+  rationale: "Same fact (user's own diet) revised — the classic non-destructive UPDATE case (§4.1)."

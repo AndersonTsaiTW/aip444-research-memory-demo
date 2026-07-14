@@ -1,0 +1,22 @@
+- id: save-001
+  turns:
+    - user: "I'm allergic to peanuts."
+  expect:
+    decision: SAVE
+    label_contains: "allerg"
+    min_importance: 4
+  rationale: "Health constraint, stable and high-stakes."
+
+- id: save-002
+  turns:
+    - user: "I live in Toronto."
+  expect:
+    decision: SAVE
+  rationale: "Stable personal fact, worth remembering long-term."
+
+- id: save-003
+  turns:
+    - user: "I am Anderson and I'm vegetarian."
+  expect:
+    decision: SAVE
+  rationale: "Compound message — at least one atomic fact should be extracted and saved."

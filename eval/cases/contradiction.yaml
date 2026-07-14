@@ -1,0 +1,10 @@
+- id: contradiction-001
+  turns:
+    - user: "I'm vegetarian."
+    - user: "Actually I recently started eating fish, so pescatarian now."
+    - user: "I'm vegetarian too, by the way."
+  expect:
+    decision: [UPDATE, SURFACED]
+  rationale: "Near-duplicate of an already-superseded topic (§4.4) should be surfaced, not silently
+    re-saved as a second, contradicting row. A model that reacts to the surfaced near-duplicate by
+    calling update_memory (UPDATE) is also an acceptable outcome — either way, no duplicate is created."

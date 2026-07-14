@@ -1,0 +1,11 @@
+- id: delete-001
+  turns:
+    - user: "I'm allergic to shellfish."
+    - user: "Please forget what I told you about my shellfish allergy."
+  expect:
+    decision: DELETE
+  rationale: "Explicit forget request for a previously-saved fact. Uses a food-allergy fact (like
+    save-001) rather than a project mention: a standalone 'I'm working on my project' turned out to be
+    inconsistently saved on its own (IGNORE'd outside the demo script's paired-with-a-clear-preference
+    framing) — a real LLM-consistency finding, but not what this case is meant to test, so DELETE gets
+    its own reliable setup instead of inheriting that confound."

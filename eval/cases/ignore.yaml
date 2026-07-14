@@ -1,0 +1,13 @@
+- id: ignore-001
+  turns:
+    - user: "Hi! Nice weather today."
+  expect:
+    decision: IGNORE
+  rationale: "Small talk — nothing worth remembering long-term."
+
+- id: ignore-002
+  turns:
+    - user: "Can you just help me phrase this one email? No need to remember it."
+  expect:
+    decision: IGNORE
+  rationale: "One-off task content, not a stable fact about the user."

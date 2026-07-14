@@ -1,0 +1,16 @@
+- id: recall-001
+  turns:
+    - user: "I'm vegetarian."
+    - user: "What do you remember about me?"
+  expect:
+    response_contains: ["vegetarian"]
+  rationale: "MemGPT-style Deep Memory Retrieval check (§7): a fact established earlier should surface
+    correctly when asked about later, in the same session."
+
+- id: recall-002
+  turns:
+    - user: "What's my favorite programming language?"
+  expect:
+    recall_empty: true
+  rationale: "Nothing stored about this — honest 'nothing relevant' rather than a hallucinated guess
+    (§4.3's MIN_SIMILARITY_SCORE threshold)."

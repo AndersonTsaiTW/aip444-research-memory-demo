@@ -9,14 +9,22 @@ Built as the prototype component of a university AI course research project.
 
 ## Status
 
-M0-M3 done, M4 in progress (guardrails + pre-write similarity check done; the `eval/` harness still to
-come) — chat loop with short-term memory, long-term memory backed by Chroma (SAVE / UPDATE
+M0-M4 done — chat loop with short-term memory, long-term memory backed by Chroma (SAVE / UPDATE
 non-destructively / DELETE softly), retrieval (vector search + rerank + recency/importance/relevance
 re-score before replying, so memories persist and get used across separate `chat` sessions), write-time
 guardrails that deny behavior-override instructions, secrets/credentials, and third-party private data
-before they ever reach storage, and a pre-write near-duplicate check that surfaces a close-matching
-existing memory instead of silently double-saving. Run it with `python -m src.main chat`; inspect stored
-memories with `python -m src.main memories` (add `--all` to include superseded/deleted rows).
+before they ever reach storage, a pre-write near-duplicate check that surfaces a close-matching existing
+memory instead of silently double-saving, and an `eval/` regression suite (real LLM, no mocks) covering
+all of the above. Run it with `python -m src.main chat`; inspect stored memories with
+`python -m src.main memories` (add `--all` to include superseded/deleted rows); run the eval suite with
+`python -m eval.run_eval` (15/15 passing as of 2026-07-16, checked stable across 3 runs).
+
+**Eval note**: `eval/cases/*.yaml` replays scripted conversations through the real agent (no mocks) and
+grades the decision layer's output; `eval/cases/poisoning.yaml` also has `direct_tool_call` cases that
+bypass the LLM entirely to prove the write-time guardrail works on its own. One early test case
+(deleting a standalone "I'm working on my project" mention) surfaced a real LLM-consistency finding —
+that fact alone didn't get saved reliably outside the demo script's paired-with-a-preference framing —
+not a code bug; see `eval/cases/delete.yaml`'s rationale field for the fix (a food-allergy fact instead).
 
 **Near-duplicate note**: `CONTRADICTION_SIMILARITY_THRESHOLD` is 0.30, not the plan's original "e.g.
 0.85" placeholder — that number was never validated and turned out far too high for the real embedding
