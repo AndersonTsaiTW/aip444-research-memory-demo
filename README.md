@@ -9,17 +9,18 @@ Built as the prototype component of a university AI course research project.
 
 ## Status
 
-Early scaffold — Python environment and dependencies only, no application code yet.
+M0 done — basic chat loop works (no memory yet: no STM buffer, no LTM, no decision layer). Run it with
+`python -m src.main chat`.
 
-## Planned stack
+## Stack
 
 - Python 3.11+, run in a project-local `venv`, no build step
 - `openai` SDK pointed at OpenRouter for the LLM and embeddings
-- `chromadb` (embedded, persistent) for long-term memory
-- `pydantic` for validating tool-call arguments and data models
+- `chromadb` (embedded, persistent) for long-term memory (not wired up yet)
+- `pydantic` for validating tool-call arguments and data models (not wired up yet)
 - Python's built-in `unittest` for unit tests
 
-## Setup (once code lands)
+## Setup
 
 Copy `.env.example` to `.env` and add your OpenRouter key:
 
@@ -33,4 +34,10 @@ Create a virtual environment and install dependencies:
 python -m venv .venv
 .venv/Scripts/activate   # on Windows; use .venv/bin/activate on macOS/Linux
 pip install -r requirements.txt
+```
+
+Run the chat loop:
+
+```bash
+python -m src.main chat
 ```
