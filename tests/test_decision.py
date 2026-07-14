@@ -1,16 +1,21 @@
+import json
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 from pydantic import ValidationError
 
 from src.decision import (
+    CONTRADICTION_SIMILARITY_THRESHOLD,
     DeleteMemoryArgs,
     SaveMemoryArgs,
     UpdateMemoryArgs,
+    _check_near_duplicate,
     _format_recall_line,
     _is_broad_recall_query,
     _recency_score,
     _rescore,
+    execute_tool_call,
 )
 
 
@@ -111,6 +116,72 @@ class TestIsBroadRecallQuery(unittest.TestCase):
     def test_does_not_flag_specific_queries(self):
         self.assertFalse(_is_broad_recall_query("What's my favorite programming language?"))
         self.assertFalse(_is_broad_recall_query("What do you know about my diet?"))
+
+
+class TestCheckNearDuplicate(unittest.TestCase):
+    @patch("src.decision.long_term.query_active")
+    def test_returns_match_at_or_above_threshold(self, mock_query):
+        mock_query.return_value = [
+            {"id": "abc123", "content": "User is vegetarian", "similarity": CONTRADICTION_SIMILARITY_THRESHOLD}
+        ]
+        result = _check_near_duplicate("I'm vegetarian too")
+        self.assertIsNotNone(result)
+        self.assertEqual(result["id"], "abc123")
+
+    @patch("src.decision.long_term.query_active")
+    def test_returns_none_below_threshold(self, mock_query):
+        mock_query.return_value = [{"id": "abc123", "content": "User is vegetarian", "similarity": 0.10}]
+        self.assertIsNone(_check_near_duplicate("I like pizza"))
+
+    @patch("src.decision.long_term.query_active")
+    def test_returns_none_when_no_candidates(self, mock_query):
+        mock_query.return_value = []
+        self.assertIsNone(_check_near_duplicate("anything"))
+
+
+class TestExecuteToolCallSaveMemory(unittest.TestCase):
+    @patch("src.decision.long_term.save_memory")
+    @patch("src.decision._check_near_duplicate")
+    def test_surfaces_near_duplicate_instead_of_saving(self, mock_check_dup, mock_save):
+        mock_check_dup.return_value = {"id": "abc123", "content": "User is vegetarian", "similarity": 0.49}
+
+        result = json.loads(
+            execute_tool_call(
+                "save_memory",
+                json.dumps(
+                    {
+                        "content": "I'm vegetarian too",
+                        "label": "dietary preference",
+                        "importance": 3,
+                        "reason": "user restated diet",
+                    }
+                ),
+                source="I'm vegetarian too, by the way.",
+            )
+        )
+
+        self.assertEqual(result["status"], "near_duplicate_found")
+        self.assertEqual(result["existing_id"], "abc123")
+        mock_save.assert_not_called()
+
+    @patch("src.decision.long_term.save_memory")
+    @patch("src.decision._check_near_duplicate")
+    def test_saves_normally_when_no_duplicate(self, mock_check_dup, mock_save):
+        mock_check_dup.return_value = None
+        mock_save.return_value = {"id": "new-id", "content": "User has a dog", "status": "active"}
+
+        result = json.loads(
+            execute_tool_call(
+                "save_memory",
+                json.dumps(
+                    {"content": "User has a dog", "label": "pet", "importance": 3, "reason": "new fact"}
+                ),
+                source="I have a dog.",
+            )
+        )
+
+        self.assertEqual(result["status"], "saved")
+        mock_save.assert_called_once()
 
 
 if __name__ == "__main__":

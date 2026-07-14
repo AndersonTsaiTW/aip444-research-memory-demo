@@ -19,6 +19,16 @@ RECALL_TOP_N = 5  # how many candidates rerank narrows down to
 # pipeline (§4.3 step 5).
 MIN_SIMILARITY_SCORE = 0.08
 
+# Pre-write near-duplicate check (§4.4). Picked empirically, same method as MIN_SIMILARITY_SCORE above
+# — but note this uses raw cosine similarity (long_term.query_active's "similarity" field), not a
+# rerank score, since this check only ever looks at one candidate and isn't worth an extra rerank call.
+# The plan's original placeholder ("e.g. 0.85") was never validated against the real embedding model —
+# tested here for real: near-duplicates ("I'm vegetarian too" / "I don't eat meat" vs. an existing
+# "User is vegetarian" memory) scored 0.38-0.49, a same-topic contradiction ("...pescatarian now")
+# scored 0.36, while a related-but-distinct fact ("I like Italian food") scored 0.23 and an unrelated
+# one scored 0.19 — a real gap between 0.23 and 0.36, so 0.30 sits in the middle.
+CONTRADICTION_SIMILARITY_THRESHOLD = 0.30
+
 # Cheap dev-tier models don't always respect the enum constraint and sometimes send a qualitative
 # word instead of an integer (e.g. importance="high") — coerce common cases instead of rejecting
 # outright, since this isn't a safety-relevant field (see §8 "LLM decisions are inconsistent").
@@ -147,6 +157,20 @@ class DeleteMemoryArgs(BaseModel):
     reason: str
 
 
+def _check_near_duplicate(content: str) -> dict | None:
+    """Pre-write similarity check (§4.4, closes the Mem0-flagged gap): queries active memories for a
+    close match before a new save_memory proceeds. Returns the closest match if it's suspiciously
+    similar, else None. Deliberately uses raw cosine similarity, not a rerank call — a single-candidate
+    check isn't worth the extra API round-trip."""
+    candidates = long_term.query_active(content, n_results=1)
+    if not candidates:
+        return None
+    best = candidates[0]
+    if best["similarity"] >= CONTRADICTION_SIMILARITY_THRESHOLD:
+        return best
+    return None
+
+
 def execute_tool_call(name: str, arguments_json: str, source: str) -> str:
     """Validates and executes one tool call against long-term storage, prints a decision trace line,
     and returns a JSON string to feed back to the model as the tool result."""
@@ -163,12 +187,31 @@ def execute_tool_call(name: str, arguments_json: str, source: str) -> str:
             if deny_reason:
                 print(f"[MEMORY] BLOCKED save — matched rule: {deny_reason}")
                 return json.dumps({"status": "blocked", "reason": deny_reason})
+
+            near_duplicate = _check_near_duplicate(parsed.content)
+            if near_duplicate:
+                print(
+                    f'[MEMORY] SURFACED   near-duplicate of "{near_duplicate["content"]}" '
+                    f'(id={near_duplicate["id"]}, similarity={near_duplicate["similarity"]:.2f})'
+                )
+                return json.dumps(
+                    {
+                        "status": "near_duplicate_found",
+                        "message": (
+                            f"This is very similar to an existing memory (id={near_duplicate['id']}): "
+                            f"'{near_duplicate['content']}'. Did you mean to call update_memory instead?"
+                        ),
+                        "existing_id": near_duplicate["id"],
+                        "existing_content": near_duplicate["content"],
+                    }
+                )
+
             memory = long_term.save_memory(parsed.content, parsed.label, parsed.importance, source)
             print(
                 f'[MEMORY] SAVE       (imp={parsed.importance}, label="{parsed.label}") '
                 f'"{parsed.content}" — reason: {parsed.reason}'
             )
-            return json.dumps({"status": "saved", **memory})
+            return json.dumps({**memory, "status": "saved"})
 
         elif name == "update_memory":
             parsed = UpdateMemoryArgs(**args)
@@ -181,13 +224,13 @@ def execute_tool_call(name: str, arguments_json: str, source: str) -> str:
                 f'[MEMORY] UPDATE     {parsed.id} → {memory["id"]} "{parsed.new_content}" '
                 f'— supersedes "{memory["supersedes_content"]}"'
             )
-            return json.dumps({"status": "updated", **memory})
+            return json.dumps({**memory, "status": "updated"})
 
         elif name == "delete_memory":
             parsed = DeleteMemoryArgs(**args)
             memory = long_term.delete_memory(parsed.id)
             print(f'[MEMORY] DELETE     {parsed.id} — reason: {parsed.reason}')
-            return json.dumps({"status": "deleted", **memory})
+            return json.dumps({**memory, "status": "deleted"})
 
         else:
             print(f"[MEMORY] REJECTED unknown tool: {name}")

@@ -9,13 +9,19 @@ Built as the prototype component of a university AI course research project.
 
 ## Status
 
-M0-M3 done, M4 in progress (guardrails done; pre-write similarity check and the `eval/` harness still
-to come) — chat loop with short-term memory, long-term memory backed by Chroma (SAVE / UPDATE
+M0-M3 done, M4 in progress (guardrails + pre-write similarity check done; the `eval/` harness still to
+come) — chat loop with short-term memory, long-term memory backed by Chroma (SAVE / UPDATE
 non-destructively / DELETE softly), retrieval (vector search + rerank + recency/importance/relevance
-re-score before replying, so memories persist and get used across separate `chat` sessions), and
-write-time guardrails that deny behavior-override instructions, secrets/credentials, and third-party
-private data before they ever reach storage. Run it with `python -m src.main chat`; inspect stored
+re-score before replying, so memories persist and get used across separate `chat` sessions), write-time
+guardrails that deny behavior-override instructions, secrets/credentials, and third-party private data
+before they ever reach storage, and a pre-write near-duplicate check that surfaces a close-matching
+existing memory instead of silently double-saving. Run it with `python -m src.main chat`; inspect stored
 memories with `python -m src.main memories` (add `--all` to include superseded/deleted rows).
+
+**Near-duplicate note**: `CONTRADICTION_SIMILARITY_THRESHOLD` is 0.30, not the plan's original "e.g.
+0.85" placeholder — that number was never validated and turned out far too high for the real embedding
+model (the clearest possible near-duplicate only scored 0.49). See the comment above the constant in
+`src/decision.py` for the empirical basis.
 
 **Guardrails note**: with a capable, safety-trained model (the current default, `gpt-4o-mini`), asking
 it to remember an API key or "ignore all future safety warnings" gets refused by the model itself
